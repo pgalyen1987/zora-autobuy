@@ -56,6 +56,10 @@ Environment: `PRIVATE_KEY` (live only), `BASE_RPC_URL` (defaults to Base's publi
   an unknown outcome can't turn into a second buy.
 - Buys are paid in USDC, so a rule's dollar amount is exact.
 
+The wallet needs USDC on Base for the buys and a little ETH on Base for gas. The first live buy
+also sends a one-time approval letting Uniswap's Permit2 move your USDC; after that each buy is one
+signed permit and one transaction, simulated before it's sent.
+
 Use a wallet that holds only what you're willing to spend. The key stays in your environment, and
 nothing else is sent anywhere except the trade itself (through Zora's trade API and Base).
 
@@ -66,7 +70,8 @@ hasn't seen, and plans buys within your limits (`src/plan.ts`, tested in `test/p
 run gets a quote from Zora for each planned buy. A live run buys with the Zora coins SDK's
 `tradeCoin`, selling USDC for the coin, and logs the Basescan link.
 
-The live path follows the SDK's documented trade call. Try it with a small `maxUsdPerDay` first.
+The live path uses the SDK's `tradeCoin`, which gets a fresh quote, signs the permit, sends any
+approval it needs, simulates the trade and then sends it. Try it with a small `maxUsdPerDay` first.
 
 ## Not financial advice
 
