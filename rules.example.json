@@ -1,0 +1,8 @@
+{
+  "maxUsdPerDay": 30,
+  "slippage": 0.05,
+  "rules": [
+    { "name": "jesse-posts", "creator": "jessepollak", "buy": "post", "usd": 5, "maxPerDay": 3 },
+    { "name": "basecompany-coin", "creator": "basecompany", "buy": "creator-coin", "usd": 10, "maxPerDay": 1 }
+  ]
+}
