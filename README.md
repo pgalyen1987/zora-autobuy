@@ -165,6 +165,31 @@ that spend sells back, so the leak names itself: `c-posts` puts `$16` in and get
 coin it bought is unsellable — so it is the first rule to cut, whatever its market caps looked like.
 `keeps` well under `100%` for a rule is the signal to drop it or change its creator.
 
+### Vet a creator before you follow them (`--creator`)
+
+"Pick creators whose coins have real two-way liquidity" is easy to say and hard to see. So point the
+round trip at any handle — in your rules or not — and it samples that creator's most recent post coins
+directly, past your daily caps (which would otherwise only ever show you two or three of them):
+
+```sh
+npm run roundtrip -- --creator somehandle              # last 12 post coins, $3 each
+npm run roundtrip -- --creator somehandle --usd 5 --posts 8
+```
+
+The `keeps` line is then the creator's own liquidity, not your config's. Two real runs on 2026-09-26,
+same command, handles replaced:
+
+```
+@creator-thin     12 post coin(s) · in $15 → back $3.05  · keeps 20%   (7 of 12 had no buy route at all)
+@creator-liquid   12 post coin(s) · in $30 → back $18.82 · keeps 63%   (10 of 12 buyable, worst kept 41%)
+```
+
+Same tool, same day: one creator's coins bleed 80% on the way out, the other keeps most of it. That
+gap is the whole game — and market cap does not predict it. In these runs the liquid creator's coins
+were the *smaller* ones ($300–$10k), the thin creator's the larger ($300k–$10M): Zora's market cap is
+price × supply, not pool depth, so it says nothing about whether you can exit. This round trip is the
+only thing that does. Run it on a handful of candidates before you ever write a rule.
+
 ## What keeps it from overspending
 
 - It never buys a post made before it first started, so turning it on doesn't buy anyone's back catalogue.

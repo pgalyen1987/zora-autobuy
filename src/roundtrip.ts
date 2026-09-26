@@ -11,9 +11,14 @@
 // It buys nothing, signs nothing and needs no wallet — two quotes per coin, same as the backtest.
 //
 //   npx tsx src/roundtrip.ts --rules rules.json --days 7
+//
+// Or vet ONE creator before you add them to rules.json — sample their recent post coins directly,
+// past any rule's daily caps, so you measure the creator's own two-way liquidity, not your config's:
+//   npx tsx src/roundtrip.ts --creator somehandle            last 12 post coins, $3 each
+//   npx tsx src/roundtrip.ts --creator somehandle --usd 5 --posts 8
 import { readFileSync } from "node:fs";
-import { replay, validate, type Config, type Post } from "./plan.ts";
-import { postsSince } from "./zora.ts";
+import { distinctByCoin, replay, validate, type Config, type Post } from "./plan.ts";
+import { latestPosts, postsSince } from "./zora.ts";
 import { USDC } from "./trade.ts";
 import { createTradeCall } from "@zoralabs/coins-sdk";
 import type { Hex } from "viem";
@@ -23,11 +28,10 @@ const args = process.argv.slice(2);
 const opt = (n: string, d: string) => { const i = args.indexOf(n); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
 const rulesFile = opt("--rules", "rules.json");
 const days = Math.max(1, Number(opt("--days", "7")));
-
-const config: Config = JSON.parse(readFileSync(rulesFile, "utf8"));
-const problems = validate(config);
-if (problems.length) { console.error(`${rulesFile} can't run:\n  ${problems.join("\n  ")}`); process.exit(1); }
-const slippage = config.slippage ?? 0.05;
+const creatorArg = opt("--creator", "").replace(/^@/, "").toLowerCase(); // vet one creator, past any rule caps
+// Set from the rules file below, or left at the 5% default when vetting a bare --creator. buyLeg/sellLeg
+// read it at call time (after the branch), so the reassignment lands before any quote is made.
+let slippage = 0.05;
 
 // Same muting as trade.ts: a coin with no swap route makes the SDK dump the raw request/response.
 const quiet = async <T>(fn: () => Promise<T>): Promise<T> => {
@@ -59,31 +63,58 @@ async function sellLeg(coin: string, amount: bigint): Promise<number | { error: 
   } catch (e: any) { return { error: why(e) }; }
 }
 
-// 1) the coins the rules point at, from the same replay() the backtest uses — not a hand-copied
-// list. Note we pass an empty noRoute set: the backtest substitutes away coins with no buy route,
-// but here we want to probe every pick, so an un-buyable one surfaces as its own "no buy route" row
-// rather than being silently swapped out. So this set can differ slightly from the backtest's buys.
-const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
-const maxPages = Math.min(60, Math.max(20, days * 5));
-const creators = [...new Set(config.rules.map((r) => r.creator.replace(/^@/, "").toLowerCase()))];
+// 1) the coins to probe — one entry per distinct coin, since the question is about the coin, not how
+// many times a rule fired on it. Two ways to choose them:
+//   · a rules file — every coin the rules would pick over the window, from the same replay() the
+//     backtest uses. We pass an empty noRoute set so every pick is probed: an un-buyable one surfaces
+//     as its own "no buy route" row rather than being swapped out, so this set can differ slightly
+//     from the backtest's buys.
+//   · --creator <handle> — that creator's most recent post coins, sampled directly, past any rule's
+//     daily caps. Vetting a creator wants their whole recent output, not the 2-3/day your caps admit;
+//     that biased sample is exactly what makes the rules-mode number about your config, not the coin.
+type Position = { rule: string; coin: string; symbol: string; usd: number };
 const posts: Post[] = [];
-for (const c of creators) {
-  try { posts.push(...(await postsSince(c, sinceIso, maxPages)).posts); }
-  catch (e: any) { console.error(`  could not read @${c}: ${why(e)}`); }
+let positions: Position[];
+let source: string;      // what the header names as the thing being probed
+let scope: string;       // one line describing the coin set
+let ruleNames: string[]; // rules to break the roll-up down by (empty in --creator mode)
+
+if (creatorArg) {
+  const usd = Math.max(1, Number(opt("--usd", "3")));
+  const k = Math.max(1, Math.min(20, Number(opt("--posts", "12")))); // Zora's profile API caps a page at 20
+  try { posts.push(...(await latestPosts(creatorArg, k))); }
+  catch (e: any) { console.error(`could not read @${creatorArg}: ${why(e)}`); process.exit(1); }
+  positions = distinctByCoin(posts).slice(0, k).map((p) => ({ rule: creatorArg, coin: p.coin, symbol: p.symbol, usd }));
+  if (!positions.length) { console.error(`@${creatorArg} has no recent post coins to check.`); process.exit(1); }
+  ruleNames = [];
+  source = `@${creatorArg}`;
+  scope = `its ${positions.length} most recent post coin(s), $${usd} each`;
+} else {
+  const config: Config = JSON.parse(readFileSync(rulesFile, "utf8"));
+  const problems = validate(config);
+  if (problems.length) { console.error(`${rulesFile} can't run:\n  ${problems.join("\n  ")}`); process.exit(1); }
+  slippage = config.slippage ?? 0.05;
+  const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
+  const maxPages = Math.min(60, Math.max(20, days * 5));
+  const creators = [...new Set(config.rules.map((r) => r.creator.replace(/^@/, "").toLowerCase()))];
+  for (const c of creators) {
+    try { posts.push(...(await postsSince(c, sinceIso, maxPages)).posts); }
+    catch (e: any) { console.error(`  could not read @${c}: ${why(e)}`); }
+  }
+  positions = distinctByCoin(replay(config, posts, { noRoute: new Set() }).buys);
+  ruleNames = config.rules.map((r) => r.name);
+  source = rulesFile;
+  scope = `every coin the rules picked in ${days} day(s) (${positions.length} distinct)`;
 }
-const { buys } = replay(config, posts, { noRoute: new Set() });
+
 const mcap = new Map(posts.map((p) => [p.coin.toLowerCase(), p.marketCap ?? null]));
 const fmtMcap = (n: number | null | undefined) =>
   n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`;
 
-// One entry per distinct coin: the question is about the coin, not about how many times a rule fired.
-const seen = new Set<string>();
-const positions = buys.filter((b) => { const k = b.coin.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const pad = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s).padEnd(n);
 
-console.log(`\nzora-autobuy round trip · ${rulesFile} · every coin the rules picked in ${days} day(s) (${positions.length} distinct)`);
+console.log(`\nzora-autobuy round trip · ${source} · ${scope}`);
 console.log(`Buy $N, then immediately quote selling back every coin that buy returned. Nothing is signed.`);
 console.log(`Not all of these can be bought — a "no buy route" coin is a pick a live run never fills. What can be bought is what the totals are measured against.\n`);
 console.log(`  ${pad("coin", 12)}${pad("mkt cap", 9)}${pad("in", 7)}${pad("back", 8)}${pad("keeps", 7)}${pad("coin addr", 14)}note`);
@@ -131,22 +162,32 @@ console.log(`\n  Read it as a hurdle: a coin has to rise ${keptPct > 0 ? `${(100
 // Which rule is the leak? A per-rule roll-up, in config order, mirroring the backtest's per-rule
 // spend table so the two commands read as one report: there you see what each rule costs, here what
 // each buys back. A rule whose coins keep next to nothing is the one to drop, whatever it spends.
-const anyRule = config.rules.some((r) => byRule.get(r.name)?.coins);
+// A per-rule roll-up only helps when there is more than one rule to compare; --creator mode probes a
+// single creator, so the totals above already say it. Break it down by rule otherwise.
+const anyRule = !creatorArg && ruleNames.some((n) => byRule.get(n)?.coins);
 if (anyRule) {
   console.log(`\nPer rule`);
-  for (const rule of config.rules) {
-    const a = byRule.get(rule.name);
+  for (const name of ruleNames) {
+    const a = byRule.get(name);
     if (!a?.coins) continue; // this rule matched no coins in the window
     const keeps = a.in ? (a.back / a.in) * 100 : 0;
     const flags = [a.unsellable ? `${a.unsellable} can't sell` : "", a.noRoute ? `${a.noRoute} no buy route` : ""].filter(Boolean).join(", ");
-    console.log(`  ${pad(rule.name, 20)} ${String(a.coins).padStart(3)} coin(s) · in ${pad(`$${a.in}`, 5)}→ back ${pad(`$${a.back.toFixed(2)}`, 7)} · keeps ${`${keeps.toFixed(0)}%`.padStart(4)}${flags ? ` · ${flags}` : ""}`);
+    console.log(`  ${pad(name, 20)} ${String(a.coins).padStart(3)} coin(s) · in ${pad(`$${a.in}`, 5)}→ back ${pad(`$${a.back.toFixed(2)}`, 7)} · keeps ${`${keeps.toFixed(0)}%`.padStart(4)}${flags ? ` · ${flags}` : ""}`);
   }
 }
 
 console.log(`\n  Quotes are slippage-adjusted minimums at ${Math.round(slippage * 100)}% and priced now, not at post time.`);
-// The backtest and this report count different sets on purpose, so say why rather than let the two
-// dollar figures read as a contradiction: the backtest fills a no-route coin's freed daily slot with
-// the next eligible post (so it can list buys and dollars this probe doesn't), while this probes each
-// pick as-is with no substitution. Both are dry; neither spends anything.
-console.log(`  "In $" here can differ from the backtest's spend: this probes every pick as-is, while the backtest`);
-console.log(`  refills a no-route coin's freed daily slot with the next post. Same rules, two questions.\n`);
+if (creatorArg) {
+  // Vetting mode samples the creator's own recent posts directly, so the number is about the creator's
+  // liquidity, not about how your caps would have thinned their output. Say that, and how to widen it.
+  console.log(`  These are @${creatorArg}'s most recent post coins, sampled directly — past any rule's daily caps,`);
+  console.log(`  so "keeps" here is the creator's own two-way liquidity. Vet it before adding them to rules.json.`);
+  console.log(`  --usd and --posts change the sample; a bigger --usd usually keeps less (thin pools move on size).\n`);
+} else {
+  // The backtest and this report count different sets on purpose, so say why rather than let the two
+  // dollar figures read as a contradiction: the backtest fills a no-route coin's freed daily slot with
+  // the next eligible post (so it can list buys and dollars this probe doesn't), while this probes each
+  // pick as-is with no substitution. Both are dry; neither spends anything.
+  console.log(`  "In $" here can differ from the backtest's spend: this probes every pick as-is, while the backtest`);
+  console.log(`  refills a no-route coin's freed daily slot with the next post. Same rules, two questions.\n`);
+}
