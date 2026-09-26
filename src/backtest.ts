@@ -82,17 +82,21 @@ if (rows.length) {
   }
 }
 const total = rows.reduce((a, r) => a + r.usd, 0);
-console.log(`  ${rows.length} buy(s) · ${money(total)} spent over the window` + (days ? ` (~${money(total / days)}/day avg)` : ""));
+const routable = rows.filter((r) => r.ok).reduce((a, r) => a + r.usd, 0);
+console.log(`  ${rows.length} buy(s) the rules fired · ${money(total)} over the window` + (days ? ` (~${money(total / days)}/day)` : ""));
+// Don't report money that wouldn't move: a buy with no swap route fails on a live run and spends
+// nothing, so the honest "what it would actually cost" is the routable part, stated separately.
+if (noRoute) console.log(`  of those, ${rows.length - noRoute} are tradeable now (${money(routable)} would actually change hands) · ${noRoute} have no swap route yet (${money(total - routable)}) and would fail a live run today until liquidity exists.`);
 // The one number that answers "what could this cost me?" — a hard ceiling the caps enforce no
 // matter how active the creators are, so it holds even where coverage above is incomplete.
 console.log(`  Ceiling: your ${money(config.maxUsdPerDay)}/day cap makes ${money(config.maxUsdPerDay * days)} the most it could spend over ${days} day${days === 1 ? "" : "s"}, however much anyone posts.`);
-if (noRoute) console.log(`  ${noRoute} of them have no tradeable route right now — a live run would fail those buys until liquidity exists.`);
 
 console.log(`\nPer rule`);
 for (const rule of config.rules) {
   const mine = rows.filter((r) => r.rule === rule.name);
   const spent = mine.reduce((a, r) => a + r.usd, 0);
-  console.log(`  ${pad(rule.name, 20)} ${String(mine.length).padStart(3)} buy(s) · ${pad(money(spent), 7)} · ${rule.buy} @${rule.creator} (cap ${rule.maxPerDay}/day, ${money(rule.usd)}/buy)`);
+  const nr = mine.filter((r) => !r.ok).length;
+  console.log(`  ${pad(rule.name, 20)} ${String(mine.length).padStart(3)} buy(s) · ${pad(money(spent), 7)}${pad(nr ? ` (${nr} no route)` : "", 14)} · ${rule.buy} @${rule.creator} (cap ${rule.maxPerDay}/day, ${money(rule.usd)}/buy)`);
 }
 if (skipped.length) console.log(`\nSkipped ${skipped.length} matching post(s): a daily cap was reached, or that coin was already bought for the rule.`);
 
