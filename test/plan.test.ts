@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { newPosts, plan, replay, validate, type Config, type Post, type Spend } from "../src/plan.ts";
+import { distinctByCoin, newPosts, plan, replay, validate, type Config, type Post, type Spend } from "../src/plan.ts";
 
 const rule = { name: "jesse", creator: "jessepollak", buy: "post" as const, usd: 10, maxPerDay: 3 };
 const config: Config = { rules: [rule], maxUsdPerDay: 25 };
@@ -19,6 +19,11 @@ test("a config without a daily ceiling or with a bad rule doesn't run", () => {
 test("posts from before the bot started, or already seen, are not new", () => {
   const posts = [post(1), post(2), post(3)];
   assert.deepEqual(newPosts(posts, new Set([post(3).coin]), "2026-09-19T01:30:00Z").map((p) => p.symbol), ["P2"]);
+});
+
+test("distinctByCoin keeps the first item per coin, in input order (case-insensitive)", () => {
+  const dup = { ...post(1), symbol: "DUP", coin: post(1).coin.toUpperCase() }; // same coin, different case
+  assert.deepEqual(distinctByCoin([post(1), post(2), dup, post(3)]).map((p) => p.symbol), ["P1", "P2", "P3"]);
 });
 
 test("one buy per new post, oldest first, within the daily ceiling", () => {

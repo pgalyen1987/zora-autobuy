@@ -59,6 +59,16 @@ export function newPosts(posts: Post[], seen: Set<string>, startedAt: string): P
   return posts.filter((p) => !seen.has(p.coin.toLowerCase()) && p.createdAt > startedAt);
 }
 
+/**
+ * Deduped to one item per coin address, keeping the first occurrence and preserving input order. The
+ * round-trip probe asks a question about each coin, not about how many times a rule fired on it, so
+ * two rules (or two posts) pointing at one coin should be probed once.
+ */
+export function distinctByCoin<T extends { coin: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((x) => { const k = x.coin.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+}
+
 /** The buys to make for these new posts, within every cap. Oldest post first. */
 export function plan(config: Config, posts: Post[], ledger: Spend[], now: Date): Buy[] {
   const today = utcDay(now.toISOString());
