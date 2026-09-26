@@ -18,6 +18,10 @@ const opt = (name: string, dflt: string) => { const i = args.indexOf(name); retu
 const rulesFile = opt("--rules", "rules.json");
 const days = Math.max(1, Number(opt("--days", "7")));
 const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
+// Pages hold ~20 posts, so a creator posting up to ~100/day needs ~5 pages/day to be fully covered.
+// Scale the page budget to the window (with a ceiling that bounds a true firehose) so an ordinarily
+// active creator reads as `complete` instead of being cut off mid-window and undercounting spend.
+const maxPages = Math.min(60, Math.max(20, days * 5));
 
 const config: Config = JSON.parse(readFileSync(rulesFile, "utf8"));
 const problems = validate(config);
@@ -38,7 +42,7 @@ const coverage = new Map<string, Cover>();
 const posts: Post[] = [];
 for (const c of creators) {
   try {
-    const r = await postsSince(c, sinceIso);
+    const r = await postsSince(c, sinceIso, maxPages);
     coverage.set(c, { earliest: r.earliest, complete: r.complete, count: r.posts.length });
     posts.push(...r.posts);
   } catch (e: any) {

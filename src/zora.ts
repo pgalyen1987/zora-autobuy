@@ -28,13 +28,20 @@ export async function latestPosts(handle: string, count = 10): Promise<Post[]> {
  * covered — either we saw a post older than the cutoff, or the creator has no more posts. It is
  * false only when `maxPages` cut us off while still inside the window, so a caller can say so
  * honestly. `earliest` is the oldest post we actually fetched (how far back we really looked).
+ *
+ * The Zora profile API returns at most 20 coins per page whatever `count` we ask for (measured
+ * 2026-09-26 — `count: 100` still yields 20), so `maxPages` is what really bounds how far back we
+ * can look: a creator who posts ~20/day needs about one page per day. The caller scales `maxPages`
+ * to the window so an ordinarily active creator is fully covered; the cap only bites on a true
+ * firehose, and when it does `complete` comes back false so the report can say the total is a floor.
  */
-export async function postsSince(handle: string, sinceIso: string, maxPages = 8): Promise<{ posts: Post[]; earliest: string | null; complete: boolean }> {
+export async function postsSince(handle: string, sinceIso: string, maxPages = 40): Promise<{ posts: Post[]; earliest: string | null; complete: boolean }> {
   const creator = handle.replace(/^@/, "");
   let after: string | undefined;
   const all: Post[] = [];
   let complete = false;
   for (let page = 0; page < maxPages; page++) {
+    // count is capped at 20 server-side; we still ask for it so the intent reads clearly.
     const r: any = await getProfileCoins({ identifier: creator, count: 100, after });
     const p = r.data?.profile;
     if (!p) { if (page === 0) throw new Error(`no Zora profile called "${creator}"`); complete = true; break; }
