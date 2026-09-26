@@ -87,24 +87,33 @@ console.log(`\nzora-autobuy round trip · ${rulesFile} · the ${positions.length
 console.log(`Buy $N, then immediately quote selling back every coin that buy returned. Nothing is signed.\n`);
 console.log(`  ${pad("coin", 12)}${pad("mkt cap", 9)}${pad("in", 7)}${pad("back", 8)}${pad("keeps", 7)}${pad("coin addr", 14)}note`);
 
+// Roll the coin-by-coin result up by the rule that bought each coin, so the closing report can name
+// which rule is losing the money — the one thing a reader changes. `in`/`back` count only coins that
+// had a buy route (a live run spends $0 on the rest), matching the overall totals below.
+type RuleAgg = { coins: number; in: number; back: number; unsellable: number; noRoute: number };
+const byRule = new Map<string, RuleAgg>();
+const bucket = (name: string) => { let a = byRule.get(name); if (!a) { a = { coins: 0, in: 0, back: 0, unsellable: 0, noRoute: 0 }; byRule.set(name, a); } return a; };
+
 let totalIn = 0, totalBack = 0, noRoute = 0, unsellable = 0, halved = 0;
 for (const b of positions) {
+  const agg = bucket(b.rule);
+  agg.coins++;
   const cap = fmtMcap(mcap.get(b.coin.toLowerCase()));
   const sym = b.symbol.endsWith("creator coin") ? "creator coin" : `$${b.symbol}`;
   const bought = await buyLeg(b.coin, b.usd);
   if (typeof bought === "object") {
-    noRoute++;
+    noRoute++; agg.noRoute++;
     console.log(`  ${pad(sym, 12)}${pad(cap, 9)}${pad(`$${b.usd}`, 7)}${pad("—", 8)}${pad("—", 7)}${pad(short(b.coin), 14)}no buy route: ${bought.error}`);
     continue;
   }
-  totalIn += b.usd;
+  totalIn += b.usd; agg.in += b.usd;
   const back = await sellLeg(b.coin, bought);
   if (typeof back === "object") {
-    unsellable++;
+    unsellable++; agg.unsellable++;
     console.log(`  ${pad(sym, 12)}${pad(cap, 9)}${pad(`$${b.usd}`, 7)}${pad("—", 8)}${pad("0%", 7)}${pad(short(b.coin), 14)}CANNOT SELL: ${back.error}`);
     continue;
   }
-  totalBack += back;
+  totalBack += back; agg.back += back;
   const keeps = (back / b.usd) * 100;
   if (keeps < 50) halved++;
   console.log(`  ${pad(sym, 12)}${pad(cap, 9)}${pad(`$${b.usd}`, 7)}${pad(`$${back.toFixed(2)}`, 8)}${pad(`${keeps.toFixed(0)}%`, 7)}${pad(short(b.coin), 14)}`);
@@ -117,4 +126,20 @@ if (unsellable) console.log(`  ${unsellable} position(s) could not be sold AT AL
 if (halved) console.log(`  ${halved} more lost over half their value on the way out.`);
 if (noRoute) console.log(`  (${noRoute} coin(s) could not even be bought; a live run fails those for $0.)`);
 console.log(`\n  Read it as a hurdle: a coin has to rise ${keptPct > 0 ? `${(100 / (keptPct / 100) - 100).toFixed(0)}%` : "infinitely"} before the position breaks even.`);
-console.log(`  Quotes are slippage-adjusted minimums at ${Math.round(slippage * 100)}% and priced now, not at post time.\n`);
+
+// Which rule is the leak? A per-rule roll-up, in config order, mirroring the backtest's per-rule
+// spend table so the two commands read as one report: there you see what each rule costs, here what
+// each buys back. A rule whose coins keep next to nothing is the one to drop, whatever it spends.
+const anyRule = config.rules.some((r) => byRule.get(r.name)?.coins);
+if (anyRule) {
+  console.log(`\nPer rule`);
+  for (const rule of config.rules) {
+    const a = byRule.get(rule.name);
+    if (!a?.coins) continue; // this rule matched no coins in the window
+    const keeps = a.in ? (a.back / a.in) * 100 : 0;
+    const flags = [a.unsellable ? `${a.unsellable} can't sell` : "", a.noRoute ? `${a.noRoute} no buy route` : ""].filter(Boolean).join(", ");
+    console.log(`  ${pad(rule.name, 20)} ${String(a.coins).padStart(3)} coin(s) · in ${pad(`$${a.in}`, 5)}→ back ${pad(`$${a.back.toFixed(2)}`, 7)} · keeps ${`${keeps.toFixed(0)}%`.padStart(4)}${flags ? ` · ${flags}` : ""}`);
+  }
+}
+
+console.log(`\n  Quotes are slippage-adjusted minimums at ${Math.round(slippage * 100)}% and priced now, not at post time.\n`);
