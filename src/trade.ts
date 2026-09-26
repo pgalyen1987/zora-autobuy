@@ -12,12 +12,20 @@ const usdcUnits = (usd: number) => BigInt(Math.round(usd * 1e6));
 
 /** Roughly how many coins `usd` buys right now, as a whole-coin number, or why it can't. */
 export async function quote(coin: string, usd: number, slippage: number): Promise<{ coins: number } | { error: string }> {
+  // A coin with no swap route makes the Zora SDK dump the raw request/response to the console before
+  // it throws. That's pure noise — we hand the reason back as { error }, which the caller logs on one
+  // line — so mute console around the call and always restore it. Quotes are made one at a time (the
+  // watch loop and the backtest both await sequentially), so this never races another quote.
+  const saved = { log: console.log, error: console.error, warn: console.warn, info: console.info };
+  console.log = console.error = console.warn = console.info = () => {};
   try {
     const q: any = await createTradeCall({ sell: { type: "erc20", address: USDC }, buy: { type: "erc20", address: coin as Hex }, amountIn: usdcUnits(usd), slippage, sender: QUOTE_SENDER });
     const out = BigInt(q?.quote?.amountOut ?? 0);
     return { coins: Number(out / 10n ** 12n) / 1e6 };
   } catch (e: any) {
     return { error: String(e?.error?.error ?? e?.message ?? e).slice(0, 120) };
+  } finally {
+    Object.assign(console, saved);
   }
 }
 

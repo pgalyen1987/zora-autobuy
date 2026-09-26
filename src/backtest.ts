@@ -54,10 +54,8 @@ for (const c of creators) {
 // spends nothing, freeing that day's slot for the next post — so which coins have a route decides
 // which posts get bought. We can't know that without asking Zora, so: replay, quote the coins it
 // picked, feed the un-routable ones back in, and repeat until the picks stop changing. Each coin is
-// quoted at most once. (The Zora SDK prints the raw request/response to the console when a coin has
-// no swap route; mute it so the report stays clean.)
-const orig = { log: console.log, error: console.error, warn: console.warn, info: console.info };
-console.log = console.error = console.warn = console.info = () => {};
+// quoted at most once. (quote() mutes the Zora SDK's raw request/response dump for no-route coins,
+// so the report below stays clean.)
 type Q = { coins: number } | { error: string };
 const quoted = new Map<string, Q>();
 const noRoute = new Set<string>();
@@ -74,7 +72,6 @@ for (let iter = 0; iter <= posts.length; iter++) {
   if (noRoute.size === before) break; // nothing new is un-routable — these picks are final
   run = replay(config, posts, { noRoute }); // some picks can't route: re-plan with their slots freed
 }
-Object.assign(console, orig);
 const { buys, skipped, noRouteBuys } = run;
 // Every buy that survived the loop routes; label it with its live quote. Un-routable matches are
 // reported separately — a live run would have failed them and bought the substitutes already listed.
