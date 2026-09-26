@@ -57,9 +57,14 @@ async function pass() {
   const fresh = newPosts(posts, new Set(state.seen), state.startedAt);
   const buys = plan(config, fresh, state.ledger, new Date());
   for (const p of fresh) if (!buys.some((b) => b.post === p.coin)) log(`skipped $${p.symbol} by @${p.creator}: a daily limit is reached, or no rule buys it`);
+  // In dry mode, a planned buy whose coin has no swap route right now would revert on a live run and
+  // spend nothing — so count it apart from the buys that would actually fill, matching how the
+  // backtest reports spend. The daily budget is only touched by buys that fill.
+  let dryNoRoute = 0;
   for (const b of buys) {
     if (!buyer) {
       const q = await quote(b.coin, b.usd, slippage);
+      if (!("coins" in q)) dryNoRoute++;
       log(`would buy $${b.usd} of ${b.symbol} (${b.coin}) for rule "${b.rule}": ${"coins" in q ? `about ${q.coins.toLocaleString("en-US")} coins at the current price` : `no quote (${q.error})`}. ${b.reason}`);
       state.ledger.push({ rule: b.rule, coin: b.coin, usd: b.usd, at: new Date().toISOString(), status: "dry-run" });
       continue;
@@ -77,9 +82,14 @@ async function pass() {
     }
     save(stateFile, state);
   }
-  // a one-line roll-up, so a --once check confirms it looked even when nothing was new
+  // a one-line roll-up, so a --once check confirms it looked even when nothing was new. In dry mode,
+  // say how many of the planned buys would actually fill vs. have no route, so the count isn't read
+  // as more spend than a live run would make.
+  const rollup = !buyer && dryNoRoute
+    ? `${buys.length} planned (${buys.length - dryNoRoute} would fill, ${dryNoRoute} no route)`
+    : `${buys.length} buy(s)`;
   if (flag("--once") || fresh.length || buys.length)
-    log(`checked ${creators.length} creator(s) · ${posts.length} recent post(s) · ${fresh.length} new · ${buys.length} buy(s)`);
+    log(`checked ${creators.length} creator(s) · ${posts.length} recent post(s) · ${fresh.length} new · ${rollup}`);
   state.seen.push(...fresh.map((p) => p.coin)); // a post is judged once, when it's new
   save(stateFile, state);
 }
