@@ -83,8 +83,9 @@ const positions = buys.filter((b) => { const k = b.coin.toLowerCase(); if (seen.
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const pad = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s).padEnd(n);
 
-console.log(`\nzora-autobuy round trip · ${rulesFile} · the ${positions.length} distinct coin(s) it would have bought in ${days} day(s)`);
-console.log(`Buy $N, then immediately quote selling back every coin that buy returned. Nothing is signed.\n`);
+console.log(`\nzora-autobuy round trip · ${rulesFile} · every coin the rules picked in ${days} day(s) (${positions.length} distinct)`);
+console.log(`Buy $N, then immediately quote selling back every coin that buy returned. Nothing is signed.`);
+console.log(`Not all of these can be bought — a "no buy route" coin is a pick a live run never fills. What can be bought is what the totals are measured against.\n`);
 console.log(`  ${pad("coin", 12)}${pad("mkt cap", 9)}${pad("in", 7)}${pad("back", 8)}${pad("keeps", 7)}${pad("coin addr", 14)}note`);
 
 // Roll the coin-by-coin result up by the rule that bought each coin, so the closing report can name
@@ -142,4 +143,10 @@ if (anyRule) {
   }
 }
 
-console.log(`\n  Quotes are slippage-adjusted minimums at ${Math.round(slippage * 100)}% and priced now, not at post time.\n`);
+console.log(`\n  Quotes are slippage-adjusted minimums at ${Math.round(slippage * 100)}% and priced now, not at post time.`);
+// The backtest and this report count different sets on purpose, so say why rather than let the two
+// dollar figures read as a contradiction: the backtest fills a no-route coin's freed daily slot with
+// the next eligible post (so it can list buys and dollars this probe doesn't), while this probes each
+// pick as-is with no substitution. Both are dry; neither spends anything.
+console.log(`  "In $" here can differ from the backtest's spend: this probes every pick as-is, while the backtest`);
+console.log(`  refills a no-route coin's freed daily slot with the next post. Same rules, two questions.\n`);

@@ -116,6 +116,10 @@ const total = rows.reduce((a, r) => a + r.usd, 0);
 // Every buy listed has a *buy* route, so this total is what a live run would actually have spent.
 // "buyable", not "tradeable": we quoted USDC→coin here, never the way back — see the Notes below.
 console.log(`  ${rows.length} buy(s), all buyable now · ${money(total)} would have changed hands over the window` + (days ? ` (~${money(total / days)}/day)` : ""));
+// This is the entry only, and buying is the easy half. Say so right here, next to the spend, not just
+// in the Notes below — a thin post coin routinely gives back almost nothing the instant you sell it,
+// which is the number that decides whether any of this is worth doing.
+console.log(`  This is the ENTRY only — buyable is not sellable. Run \`npm run roundtrip -- --rules ${rulesFile}\` for the exit; for thin coins it can return almost nothing.`);
 // Un-routable matches don't add cost: a live run fails them for $0 and — its slot freed — buys the
 // next eligible post instead, which is already in the total above. Say so, so the report is honest
 // about why some posts aren't listed rather than silently dropping them.
