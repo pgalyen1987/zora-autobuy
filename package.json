@@ -16,6 +16,9 @@
     "@zoralabs/coins-sdk": "^0.8.0",
     "viem": "^2.53.1"
   },
+  "overrides": {
+    "ws": "^8.21.3"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.19.0",
