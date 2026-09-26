@@ -50,19 +50,39 @@ for (const c of creators) {
   }
 }
 
-// 2) replay day by day, then quote each buy at the current price. The Zora SDK prints the raw
-// request/response to the console when a coin has no swap route; mute it so the report stays clean.
-const { buys, skipped } = replay(config, posts);
-const rows = [];
-let noRoute = 0;
+// 2) find what it would have bought. A buy for a coin with no swap route fails on a live run and
+// spends nothing, freeing that day's slot for the next post — so which coins have a route decides
+// which posts get bought. We can't know that without asking Zora, so: replay, quote the coins it
+// picked, feed the un-routable ones back in, and repeat until the picks stop changing. Each coin is
+// quoted at most once. (The Zora SDK prints the raw request/response to the console when a coin has
+// no swap route; mute it so the report stays clean.)
 const orig = { log: console.log, error: console.error, warn: console.warn, info: console.info };
 console.log = console.error = console.warn = console.info = () => {};
-for (const b of buys) {
-  const q = await quote(b.coin, b.usd, slippage);
-  if ("coins" in q) rows.push({ ...b, quote: `${num(q.coins)} coins`, ok: true });
-  else { noRoute++; rows.push({ ...b, quote: /route/i.test(q.error) ? "no route yet" : `no quote`, ok: false }); }
+type Q = { coins: number } | { error: string };
+const quoted = new Map<string, Q>();
+const noRoute = new Set<string>();
+let run = replay(config, posts, { noRoute });
+for (let iter = 0; iter <= posts.length; iter++) {
+  const fresh = run.buys.filter((b) => !quoted.has(b.coin.toLowerCase()));
+  if (!fresh.length) break; // every picked coin has been priced and routes: the picks have settled
+  const before = noRoute.size;
+  for (const b of fresh) {
+    const q = await quote(b.coin, b.usd, slippage);
+    quoted.set(b.coin.toLowerCase(), q);
+    if (!("coins" in q)) noRoute.add(b.coin.toLowerCase());
+  }
+  if (noRoute.size === before) break; // nothing new is un-routable — these picks are final
+  run = replay(config, posts, { noRoute }); // some picks can't route: re-plan with their slots freed
 }
 Object.assign(console, orig);
+const { buys, skipped, noRouteBuys } = run;
+// Every buy that survived the loop routes; label it with its live quote. Un-routable matches are
+// reported separately — a live run would have failed them and bought the substitutes already listed.
+const rows = buys.map((b) => {
+  const q = quoted.get(b.coin.toLowerCase());
+  return { ...b, quote: q && "coins" in q ? `${num(q.coins)} coins` : "—" };
+});
+const noRouteCoins = new Set(noRouteBuys.map((b) => b.coin.toLowerCase()));
 
 // 3) report
 const anyIncomplete = [...coverage.values()].some((c) => !c.complete && !c.error);
@@ -86,11 +106,12 @@ if (rows.length) {
   }
 }
 const total = rows.reduce((a, r) => a + r.usd, 0);
-const routable = rows.filter((r) => r.ok).reduce((a, r) => a + r.usd, 0);
-console.log(`  ${rows.length} buy(s) the rules fired · ${money(total)} over the window` + (days ? ` (~${money(total / days)}/day)` : ""));
-// Don't report money that wouldn't move: a buy with no swap route fails on a live run and spends
-// nothing, so the honest "what it would actually cost" is the routable part, stated separately.
-if (noRoute) console.log(`  of those, ${rows.length - noRoute} are tradeable now (${money(routable)} would actually change hands) · ${noRoute} have no swap route yet (${money(total - routable)}) and would fail a live run today until liquidity exists.`);
+// Every buy listed routes, so this total is what a live run would actually have spent — no caveat.
+console.log(`  ${rows.length} buy(s), all tradeable now · ${money(total)} would have changed hands over the window` + (days ? ` (~${money(total / days)}/day)` : ""));
+// Un-routable matches don't add cost: a live run fails them for $0 and — its slot freed — buys the
+// next eligible post instead, which is already in the total above. Say so, so the report is honest
+// about why some posts aren't listed rather than silently dropping them.
+if (noRouteCoins.size) console.log(`  (${noRouteCoins.size} matched coin${noRouteCoins.size === 1 ? "" : "s"} had no swap route; a live run would have failed ${noRouteCoins.size === 1 ? "it" : "them"} for $0 and bought the next eligible post — that substitution is already reflected above.)`);
 // The one number that answers "what could this cost me?" — a hard ceiling the caps enforce no
 // matter how active the creators are, so it holds even where coverage above is incomplete.
 console.log(`  Ceiling: your ${money(config.maxUsdPerDay)}/day cap makes ${money(config.maxUsdPerDay * days)} the most it could spend over ${days} day${days === 1 ? "" : "s"}, however much anyone posts.`);
@@ -99,13 +120,15 @@ console.log(`\nPer rule`);
 for (const rule of config.rules) {
   const mine = rows.filter((r) => r.rule === rule.name);
   const spent = mine.reduce((a, r) => a + r.usd, 0);
-  const nr = mine.filter((r) => !r.ok).length;
-  console.log(`  ${pad(rule.name, 20)} ${String(mine.length).padStart(3)} buy(s) · ${pad(money(spent), 7)}${pad(nr ? ` (${nr} no route)` : "", 14)} · ${rule.buy} @${rule.creator} (cap ${rule.maxPerDay}/day, ${money(rule.usd)}/buy)`);
+  const nr = new Set(noRouteBuys.filter((b) => b.rule === rule.name).map((b) => b.coin.toLowerCase())).size;
+  console.log(`  ${pad(rule.name, 20)} ${String(mine.length).padStart(3)} buy(s) · ${pad(money(spent), 7)}${pad(nr ? ` (${nr} skipped, no route)` : "", 22)} · ${rule.buy} @${rule.creator} (cap ${rule.maxPerDay}/day, ${money(rule.usd)}/buy)`);
 }
 if (skipped.length) console.log(`\nSkipped ${skipped.length} matching post(s): a daily cap was reached, or that coin was already bought for the rule.`);
 
 console.log(`\nNotes`);
 console.log(`  · Cost is exact — every buy is a fixed number of dollars in USDC. Coin counts are TODAY's`);
 console.log(`    Zora quote, not the price when the post went out, so a live buy then would differ.`);
+console.log(`  · Route is checked today, too: a coin with no route now may have had (or later gain) one, so`);
+console.log(`    which posts are "skipped, no route" would shift on a live run at a different time.`);
 if (anyIncomplete) console.log(`  · Coverage marked INCOMPLETE above is a floor: the profile API stops after so many pages, so a\n    very active creator's older posts in the window aren't counted. Real spend would be higher.`);
 console.log(`  · This respects the daily caps a live run would, so these totals are what it would spend.\n`);

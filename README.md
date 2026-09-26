@@ -64,8 +64,10 @@ live run would actually spend. Three honest limits it states in the report:
 - **Cost is exact; coin counts are not.** Every buy is a fixed number of dollars in USDC, so the
   spend is precise. The coin counts are *today's* quote, not the price when the post went out.
 - **Some coins have no route yet.** A brand-new coin may not have a tradeable swap route, so a live
-  buy would fail until liquidity exists. The report separates the buys that would actually change
-  hands from the ones that would fail today, and never counts the latter as money spent.
+  buy would fail until liquidity exists. The backtest models this the way a live run behaves: it
+  fails such a buy for `$0` and — because a failed buy frees that day's slot — buys the next eligible
+  post instead. So every buy it lists is one that would really fill, and the total is real spend, not
+  an optimistic count. It reports separately how many matched coins had no route and were skipped.
 - **A firehose creator's older posts may be missing.** The profile API returns a bounded number of
   pages, so for a creator who posts constantly the window can't be fully reconstructed. When that
   happens the report marks the creator `INCOMPLETE` and treats its spend as a floor.
@@ -77,36 +79,37 @@ Handles and coin symbols are replaced with placeholders below; the numbers are u
 
 ```
 Coverage
-  @creator-a         171 post(s) in window · complete
+  @creator-a         178 post(s) in window · complete
   @creator-b           8 post(s) in window · complete
   @creator-c           4 post(s) in window · complete
   @creator-d           2 post(s) in window · complete
 
-Buys it would have made (30)
+Buys it would have made (29)
   when (UTC)       rule              bought                  $   ~coins (now)          coin
-  2026-09-19 14:51 a-posts           post $COIN1             3   16,378,070 coins      0x…6b12
-  2026-09-20 03:06 c-posts           post $COIN2             4   25,178,840 coins      0x…5248
-  2026-09-21 10:41 a-posts           post $COIN3             3   no route yet          0x…f720
-  2026-09-24 15:16 b-posts           post $COIN4             4   27,939,536 coins      0x…b3b9
-  2026-09-26 02:21 d-coin            creator coin            5   701,692 coins         0x…0d56
-  … 25 more rows …
-  30 buy(s) the rules fired · $101 over the window (~$14.43/day)
-  of those, 25 are tradeable now ($86 would actually change hands) · 5 have no swap route yet ($15) and would fail a live run today until liquidity exists.
+  2026-09-19 14:51 a-posts           post $COIN1             3   16,380,891 coins      0x…6b12
+  2026-09-20 03:06 c-posts           post $COIN2             4   25,182,918 coins      0x…5248
+  2026-09-24 15:16 b-posts           post $COIN3             4   27,943,381 coins      0x…b3b9
+  2026-09-25 12:33 a-posts           post $COIN4             3   158,229,315 coins     0x…fbb9
+  2026-09-26 02:21 d-coin            creator coin            5   701,798 coins         0x…0d56
+  … 24 more rows …
+  29 buy(s), all tradeable now · $98 would have changed hands over the window (~$14/day)
+  (6 matched coins had no swap route; a live run would have failed them for $0 and bought the next eligible post — that substitution is already reflected above.)
   Ceiling: your $25/day cap makes $175 the most it could spend over 7 days, however much anyone posts.
 
 Per rule
-  a-posts               20 buy(s) · $60     (5 no route)  · post @creator-a (cap 3/day, $3/buy)
-  b-posts                5 buy(s) · $20                   · post @creator-b (cap 2/day, $4/buy)
-  c-posts                4 buy(s) · $16                   · post @creator-c (cap 2/day, $4/buy)
-  d-coin                 1 buy(s) · $5                    · creator-coin @creator-d (cap 1/day, $5/buy)
+  a-posts               19 buy(s) · $57     (6 skipped, no route) · post @creator-a (cap 3/day, $3/buy)
+  b-posts                5 buy(s) · $20                           · post @creator-b (cap 2/day, $4/buy)
+  c-posts                4 buy(s) · $16                           · post @creator-c (cap 2/day, $4/buy)
+  d-coin                 1 buy(s) · $5                            · creator-coin @creator-d (cap 1/day, $5/buy)
 
-Skipped 155 matching post(s): a daily cap was reached, or that coin was already bought for the rule.
+Skipped 157 matching post(s): a daily cap was reached, or that coin was already bought for the rule.
 ```
 
 The caps are the story: `@creator-a` posts dozens of times a day, so its `3/day` limit fires three
-buys and skips the rest — 155 skipped posts against 30 buys. A prolific creator can't drain the
+buys and skips the rest — 157 skipped posts against 29 buys. A prolific creator can't drain the
 wallet, and the `$25`/day ceiling means the whole set can't spend more than `$175` in a week no
-matter who posts.
+matter who posts. (Here even that ceiling never binds: the per-rule `maxPerDay` limits keep the week
+to `$98`.)
 
 ## What keeps it from overspending
 

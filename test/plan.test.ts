@@ -72,3 +72,23 @@ test("replay stamps each buy with the triggering post's time and respects per-ru
   assert.equal(buys[0].at, rp(1, 20).createdAt); // fires at the post's time, oldest first
   assert.deepEqual(skipped.map((p) => p.symbol), ["P3"]);
 });
+
+test("replay: an un-routable coin fails for $0 and hands its daily slot to the next post", () => {
+  const cfg: Config = { rules: [{ name: "r", creator: "jessepollak", buy: "post", usd: 10, maxPerDay: 3 }], maxUsdPerDay: 100 };
+  const posts = [rp(1, 20), rp(2, 20), rp(3, 20), rp(4, 20)];
+  const noRoute = new Set([rp(2, 20).coin.toLowerCase()]);
+  const { buys, noRouteBuys } = replay(cfg, posts, { noRoute });
+  // P2 can't route: a live run fails it for $0 and the slot goes to P4, so three real buys — not P1–P3.
+  assert.deepEqual(buys.map((b) => b.symbol), ["P1", "P3", "P4"]);
+  assert.deepEqual(noRouteBuys.map((b) => b.symbol), ["P2"]);
+});
+
+test("replay: when nothing routes, no money moves and failures never burn the cap", () => {
+  const cfg: Config = { rules: [{ name: "r", creator: "jessepollak", buy: "post", usd: 10, maxPerDay: 2 }], maxUsdPerDay: 100 };
+  const posts = [rp(1, 20), rp(2, 20), rp(3, 20)];
+  const noRoute = new Set(posts.map((p) => p.coin.toLowerCase()));
+  const { buys, noRouteBuys } = replay(cfg, posts, { noRoute });
+  // A failed buy spends nothing and doesn't count against maxPerDay, so all three are attempted and $0 moves.
+  assert.deepEqual(buys, []);
+  assert.deepEqual(noRouteBuys.map((b) => b.symbol), ["P1", "P2", "P3"]);
+});

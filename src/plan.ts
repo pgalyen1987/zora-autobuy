@@ -88,37 +88,53 @@ export function plan(config: Config, posts: Post[], ledger: Spend[], now: Date):
 }
 
 /**
- * Replay `posts` as if the bot had watched them arrive, day by day, applying every cap exactly as a
- * live run would: `maxPerDay` and `maxUsdPerDay` reset each UTC day, a coin is bought once per rule
- * across the whole window. Pure — no network, no wallet. Used by the backtest to answer "what would
- * this have bought, and cost, over the last N days" honestly. Unlike a dry run of the watch loop,
- * these simulated buys count against the caps, so the totals are what a live run would really spend.
+ * Replay `posts` as if the bot had watched them arrive, one at a time in the order they were posted,
+ * applying every cap exactly as a live run would: `maxPerDay` and `maxUsdPerDay` reset each UTC day,
+ * and a coin is bought once per rule across the whole window. Pure — no network, no wallet. Used by
+ * the backtest to answer "what would this have bought, and cost, over the last N days" honestly.
+ * Unlike a dry run of the watch loop, these simulated buys count against the caps, so the totals are
+ * what a live run would really spend.
  *
- * Returns each buy with the timestamp it would have fired at, and the posts a rule matched but did
- * not buy (a cap was reached, or that coin was already bought for the rule).
+ * `opts.noRoute` is the set of coin addresses (lower-case) that have no swap route right now. A live
+ * run still *attempts* those buys, the trade reverts, and — because a failed buy spends nothing and
+ * frees its daily slot — the bot goes on to buy the next eligible post instead. Modelling that is
+ * what makes the cost estimate honest: without it, a day full of un-routable posts looks like it
+ * spent the daily budget, when a live run would have spent it on other, routable posts (or not at
+ * all). The backtest fills this set by quoting each candidate and re-running until the picks settle.
+ * Left empty (the default), every candidate is assumed routable — the old, cap-only behaviour.
+ *
+ * Returns the routable buys it would have made (each stamped with the triggering post's time), the
+ * un-routable buys a live run would have attempted and had fail, and the posts a rule matched but
+ * did not buy (a cap was reached, or that coin was already bought for the rule).
  */
-export function replay(config: Config, posts: Post[]): { buys: (Buy & { at: string })[]; skipped: Post[] } {
-  const byDay = new Map<string, Post[]>();
-  for (const p of posts) {
-    const d = utcDay(p.createdAt);
-    const a = byDay.get(d);
-    if (a) a.push(p); else byDay.set(d, [p]);
-  }
+export function replay(
+  config: Config,
+  posts: Post[],
+  opts: { noRoute?: Set<string> } = {},
+): { buys: (Buy & { at: string })[]; skipped: Post[]; noRouteBuys: (Buy & { at: string })[] } {
+  const noRoute = opts.noRoute ?? new Set<string>();
   const ledger: Spend[] = [];
   const buys: (Buy & { at: string })[] = [];
+  const noRouteBuys: (Buy & { at: string })[] = [];
   const skipped: Post[] = [];
-  for (const d of [...byDay.keys()].sort()) {
-    const dayPosts = byDay.get(d)!;
-    const dayBuys = plan(config, dayPosts, ledger, new Date(`${d}T23:59:59.999Z`));
-    for (const b of dayBuys) {
-      const post = dayPosts.find((p) => p.coin === b.post)!;
-      ledger.push({ rule: b.rule, coin: b.coin, usd: b.usd, at: post.createdAt, status: "done" });
-      buys.push({ ...b, at: post.createdAt });
+  // One post at a time, dated at its own timestamp: the daily caps roll over on UTC-day boundaries,
+  // and any earlier failed (un-routable) buy that day has already freed its slot — exactly how a
+  // live run polls and reacts. Processing chronologically models a bot that checks often enough to
+  // see each post on its own pass, which is the common case (creators post minutes, not seconds, apart).
+  for (const p of [...posts].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const picks = plan(config, [p], ledger, new Date(p.createdAt));
+    for (const b of picks) {
+      if (noRoute.has(b.coin.toLowerCase())) {
+        // Record it failed: a live run's trade would revert, spending nothing and leaving the slot open.
+        ledger.push({ rule: b.rule, coin: b.coin, usd: b.usd, at: p.createdAt, status: "failed" });
+        noRouteBuys.push({ ...b, at: p.createdAt });
+      } else {
+        ledger.push({ rule: b.rule, coin: b.coin, usd: b.usd, at: p.createdAt, status: "done" });
+        buys.push({ ...b, at: p.createdAt });
+      }
     }
-    for (const p of dayPosts) {
-      const matched = config.rules.some((r) => r.creator.replace(/^@/, "").toLowerCase() === p.creator.toLowerCase());
-      if (matched && !dayBuys.some((b) => b.post === p.coin)) skipped.push(p);
-    }
+    const matched = config.rules.some((r) => r.creator.replace(/^@/, "").toLowerCase() === p.creator.toLowerCase());
+    if (matched && !picks.some((b) => b.post === p.coin)) skipped.push(p);
   }
-  return { buys, skipped };
+  return { buys, skipped, noRouteBuys };
 }
