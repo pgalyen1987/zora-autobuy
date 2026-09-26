@@ -77,6 +77,9 @@ async function pass() {
     }
     save(stateFile, state);
   }
+  // a one-line roll-up, so a --once check confirms it looked even when nothing was new
+  if (flag("--once") || fresh.length || buys.length)
+    log(`checked ${creators.length} creator(s) · ${posts.length} recent post(s) · ${fresh.length} new · ${buys.length} buy(s)`);
   state.seen.push(...fresh.map((p) => p.coin)); // a post is judged once, when it's new
   save(stateFile, state);
 }

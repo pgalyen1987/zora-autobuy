@@ -45,6 +45,28 @@ Options: `--interval <seconds>` (at least 15), `--state <file>` (default `state/
 Environment: `PRIVATE_KEY` (live only), `BASE_RPC_URL` (defaults to Base's public RPC),
 `ZORA_API_KEY` (optional, raises Zora's rate limits).
 
+## See it on real history first (`backtest`)
+
+A fresh run never buys posts made before it started, so on day one it does nothing until a creator
+posts again. To see what your rules *would* have done, replay them over the last few days against
+real Zora data:
+
+```sh
+npm run backtest -- --rules rules.json                # last 7 days
+npm run backtest -- --rules rules.json --days 30      # a longer window
+```
+
+It buys nothing and needs no wallet. It prints every buy it would have made — when, which rule
+fired and why, and how many coins that dollar amount buys at the current Zora quote — plus a per-rule
+breakdown and the total. It applies the same daily caps a live run would, so the totals are what a
+live run would actually spend. Two honest limits it states in the report:
+
+- **Cost is exact; coin counts are not.** Every buy is a fixed number of dollars in USDC, so the
+  spend is precise. The coin counts are *today's* quote, not the price when the post went out.
+- **A firehose creator's older posts may be missing.** The profile API returns a bounded number of
+  pages, so for a creator who posts constantly the window can't be fully reconstructed. When that
+  happens the report marks the creator `INCOMPLETE` and treats its spend as a floor.
+
 ## What keeps it from overspending
 
 - It never buys a post made before it first started, so turning it on doesn't buy anyone's back catalogue.
