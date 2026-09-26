@@ -21,7 +21,7 @@ export type Config = {
   slippage?: number;
 };
 
-export type Post = { creator: string; coin: string; symbol: string; createdAt: string; creatorCoin: string | null };
+export type Post = { creator: string; coin: string; symbol: string; createdAt: string; creatorCoin: string | null; marketCap?: number | null };
 export type Spend = { rule: string; coin: string; usd: number; at: string; status: "reserved" | "done" | "failed" | "dry-run"; tx?: string };
 export type Buy = { rule: string; creator: string; post: string; coin: string; symbol: string; usd: number; trigger: string; reason: string };
 

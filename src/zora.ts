@@ -4,13 +4,27 @@ import type { Post } from "./plan.ts";
 
 if (process.env.ZORA_API_KEY) setApiKey(process.env.ZORA_API_KEY);
 
+/**
+ * USD market cap = price per coin × total supply. Derive it rather than trust Zora's own `marketCap`
+ * field, which comes back 0 for coins whose pool trades against a creator/exotic token (e.g. a
+ * creator coin) even though a USD price exists — reporting that 0 would read as "worthless" when it
+ * only means "unpriced against USD in the field". Fall back to the field, then to null when we
+ * genuinely can't price it, so the backtest can honestly show "—" instead of a made-up number.
+ */
+export function mktCap(n: any): number | null {
+  const derived = Number(n.tokenPrice?.priceInUsdc ?? 0) * Number(n.totalSupply ?? 0);
+  if (derived > 0) return derived;
+  const field = Number(n.marketCap ?? 0);
+  return field > 0 ? field : null;
+}
+
 /** One profile page's content coins, as Posts, carrying the creator's creator-coin address. */
 function toPosts(creator: string, profile: any): Post[] {
   const creatorCoin: string | null = profile.creatorCoin?.address?.toLowerCase() ?? null;
   return (profile.createdCoins?.edges ?? [])
     .map((e: any) => e.node)
     .filter((n: any) => n.coinType === "CONTENT")
-    .map((n: any) => ({ creator, coin: String(n.address).toLowerCase(), symbol: n.symbol ?? "", createdAt: new Date(n.createdAt).toISOString(), creatorCoin }));
+    .map((n: any) => ({ creator, coin: String(n.address).toLowerCase(), symbol: n.symbol ?? "", createdAt: new Date(n.createdAt).toISOString(), creatorCoin, marketCap: mktCap(n) }));
 }
 
 /** The creator's latest posts, newest first, with their creator coin's address. */

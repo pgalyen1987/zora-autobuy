@@ -56,10 +56,11 @@ npm run backtest -- --rules rules.json                # last 7 days
 npm run backtest -- --rules rules.json --days 30      # a longer window
 ```
 
-It buys nothing and needs no wallet. It prints every buy it would have made — when, which rule
-fired and why, and how many coins that dollar amount buys at the current Zora quote — plus a per-rule
-breakdown and the total. It applies the same daily caps a live run would, so the totals are what a
-live run would actually spend. Three honest limits it states in the report:
+It buys nothing and needs no wallet. It prints every buy it would have made — when, which rule fired
+and why, the coin's current market cap (a rough real-coin-vs-throwaway signal) and how many coins that
+dollar amount buys at the current Zora quote — plus a per-rule breakdown and the total. It applies the
+same daily caps a live run would, so the totals are what a live run would actually spend. Three honest
+limits it states in the report:
 
 - **Cost is exact; coin counts are not.** Every buy is a fixed number of dollars in USDC, so the
   spend is precise. The coin counts are *today's* quote, not the price when the post went out.
@@ -85,12 +86,12 @@ Coverage
   @creator-d           2 post(s) in window · complete
 
 Buys it would have made (29)
-  when (UTC)       rule              bought (why)                $   ~coins (now)          coin
-  2026-09-19 14:51 a-posts           post $COIN1                 3   16,380,891 coins      0x…6b12
-  2026-09-20 03:06 c-posts           post $COIN2                 4   25,182,918 coins      0x…5248
-  2026-09-24 15:16 b-posts           post $COIN3                 4   27,943,381 coins      0x…b3b9
-  2026-09-25 12:33 a-posts           post $COIN4                 3   158,229,315 coins     0x…fbb9
-  2026-09-26 02:21 d-coin            creator coin ← $COIN0       5   701,798 coins         0x…0d56
+  when (UTC)       rule              bought (why)                $   mkt cap  ~coins (now)          coin
+  2026-09-19 14:51 a-posts           post $COIN1                 3   $147     16,135,002 coins      0x…6b12
+  2026-09-20 03:06 c-posts           post $COIN2                 4   $114     25,065,802 coins      0x…5248
+  2026-09-24 15:16 b-posts           post $COIN3                 4   $106     27,249,355 coins      0x…b3b9
+  2026-09-25 12:33 a-posts           post $COIN4                 3   $2       158,125,556 coins     0x…fbb9
+  2026-09-26 02:21 d-coin            creator coin ← $COIN0       5   —        698,208 coins         0x…0d56
   … 24 more rows …
   29 buy(s), all tradeable now · $98 would have changed hands over the window (~$14/day)
   (6 matched coins had no swap route; a live run would have failed them for $0 and bought the next eligible post — that substitution is already reflected above.)
@@ -142,6 +143,7 @@ approval it needs, simulates the trade and then sends it. Try it with a small `m
 ## Not financial advice
 
 Creator and post coins are volatile and often illiquid; a coin bought seconds after a post can fall
-as fast as it rose. You're responsible for your rules and your wallet.
+as fast as it rose. The backtest's `mkt cap` column makes this concrete — many post coins are
+sub-$1,000 microcaps. You're responsible for your rules and your wallet.
 
 MIT licensed.

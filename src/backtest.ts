@@ -32,6 +32,9 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const utc = (iso: string) => iso.slice(0, 16).replace("T", " ");
 const money = (n: number) => `$${n % 1 ? n.toFixed(2) : n}`;
 const num = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+// Market cap, rounded to a size a reader can eyeball: $1.2M, $47k, $9. "—" when we don't have it.
+const fmtMcap = (n: number | null | undefined) =>
+  n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}k` : `$${Math.round(n)}`;
 const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const pad = (s: string, n: number) => clip(s, n).padEnd(n);
 
@@ -73,11 +76,16 @@ for (let iter = 0; iter <= posts.length; iter++) {
   run = replay(config, posts, { noRoute }); // some picks can't route: re-plan with their slots freed
 }
 const { buys, skipped, noRouteBuys } = run;
+// Market cap comes free with the posts we already fetched (no extra call). A "post" buy is the post
+// itself, so we have its cap; a "creator-coin" buy is a different coin whose cap isn't in this data,
+// so it shows "—". It's a rough "real coin or throwaway?" signal, and like the coin count it's a
+// today figure, not the size at post time.
+const marketCap = new Map(posts.map((p) => [p.coin.toLowerCase(), p.marketCap ?? null]));
 // Every buy that survived the loop routes; label it with its live quote. Un-routable matches are
 // reported separately — a live run would have failed them and bought the substitutes already listed.
 const rows = buys.map((b) => {
   const q = quoted.get(b.coin.toLowerCase());
-  return { ...b, quote: q && "coins" in q ? `${num(q.coins)} coins` : "—" };
+  return { ...b, quote: q && "coins" in q ? `${num(q.coins)} coins` : "—", mcap: fmtMcap(marketCap.get(b.coin.toLowerCase())) };
 });
 const noRouteCoins = new Set(noRouteBuys.map((b) => b.coin.toLowerCase()));
 
@@ -96,12 +104,12 @@ for (const c of creators) {
 
 console.log(`\nBuys it would have made (${rows.length})`);
 if (rows.length) {
-  console.log(`  ${pad("when (UTC)", 17)}${pad("rule", 18)}${pad("bought (why)", 28)}${pad("$", 4)}${pad("~coins (now)", 22)}coin`);
+  console.log(`  ${pad("when (UTC)", 17)}${pad("rule", 18)}${pad("bought (why)", 28)}${pad("$", 4)}${pad("mkt cap", 9)}${pad("~coins (now)", 22)}coin`);
   for (const r of rows) {
     // For a post rule the coin bought is the post, so it names its own trigger. A creator-coin rule
     // buys something else (the creator coin) when a post fires it, so name that post — "why it fired".
     const what = r.symbol.endsWith("creator coin") ? `creator coin ← $${r.trigger}` : `post $${r.symbol}`;
-    console.log(`  ${pad(utc(r.at), 17)}${pad(r.rule, 18)}${pad(what, 28)}${pad(String(r.usd), 4)}${pad(r.quote, 22)}${short(r.coin)}`);
+    console.log(`  ${pad(utc(r.at), 17)}${pad(r.rule, 18)}${pad(what, 28)}${pad(String(r.usd), 4)}${pad(r.mcap, 9)}${pad(r.quote, 22)}${short(r.coin)}`);
   }
 }
 const total = rows.reduce((a, r) => a + r.usd, 0);
@@ -127,6 +135,8 @@ if (skipped.length) console.log(`\nSkipped ${skipped.length} matching post(s): a
 console.log(`\nNotes`);
 console.log(`  · Cost is exact — every buy is a fixed number of dollars in USDC. Coin counts are TODAY's`);
 console.log(`    Zora quote, not the price when the post went out, so a live buy then would differ.`);
+console.log(`  · "mkt cap" is the coin's Zora market cap now — a rough real-coin-vs-throwaway signal, also a`);
+console.log(`    today figure. "—" means it wasn't in the data (a creator-coin buy carries only an address).`);
 console.log(`  · Route is checked today, too: a coin with no route now may have had (or later gain) one, so`);
 console.log(`    which posts are "skipped, no route" would shift on a live run at a different time.`);
 if (anyIncomplete) console.log(`  · Coverage marked INCOMPLETE above is a floor: the profile API stops after so many pages, so a\n    very active creator's older posts in the window aren't counted. Real spend would be higher.`);
