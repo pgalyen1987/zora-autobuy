@@ -85,12 +85,12 @@ Coverage
   @creator-d           2 post(s) in window · complete
 
 Buys it would have made (29)
-  when (UTC)       rule              bought                  $   ~coins (now)          coin
-  2026-09-19 14:51 a-posts           post $COIN1             3   16,380,891 coins      0x…6b12
-  2026-09-20 03:06 c-posts           post $COIN2             4   25,182,918 coins      0x…5248
-  2026-09-24 15:16 b-posts           post $COIN3             4   27,943,381 coins      0x…b3b9
-  2026-09-25 12:33 a-posts           post $COIN4             3   158,229,315 coins     0x…fbb9
-  2026-09-26 02:21 d-coin            creator coin            5   701,798 coins         0x…0d56
+  when (UTC)       rule              bought (why)                $   ~coins (now)          coin
+  2026-09-19 14:51 a-posts           post $COIN1                 3   16,380,891 coins      0x…6b12
+  2026-09-20 03:06 c-posts           post $COIN2                 4   25,182,918 coins      0x…5248
+  2026-09-24 15:16 b-posts           post $COIN3                 4   27,943,381 coins      0x…b3b9
+  2026-09-25 12:33 a-posts           post $COIN4                 3   158,229,315 coins     0x…fbb9
+  2026-09-26 02:21 d-coin            creator coin ← $COIN0       5   701,798 coins         0x…0d56
   … 24 more rows …
   29 buy(s), all tradeable now · $98 would have changed hands over the window (~$14/day)
   (6 matched coins had no swap route; a live run would have failed them for $0 and bought the next eligible post — that substitution is already reflected above.)

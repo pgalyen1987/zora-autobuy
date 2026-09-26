@@ -96,10 +96,12 @@ for (const c of creators) {
 
 console.log(`\nBuys it would have made (${rows.length})`);
 if (rows.length) {
-  console.log(`  ${pad("when (UTC)", 17)}${pad("rule", 18)}${pad("bought", 24)}${pad("$", 4)}${pad("~coins (now)", 22)}coin`);
+  console.log(`  ${pad("when (UTC)", 17)}${pad("rule", 18)}${pad("bought (why)", 28)}${pad("$", 4)}${pad("~coins (now)", 22)}coin`);
   for (const r of rows) {
-    const what = r.symbol.endsWith("creator coin") ? `creator coin` : `post $${r.symbol}`;
-    console.log(`  ${pad(utc(r.at), 17)}${pad(r.rule, 18)}${pad(what, 24)}${pad(String(r.usd), 4)}${pad(r.quote, 22)}${short(r.coin)}`);
+    // For a post rule the coin bought is the post, so it names its own trigger. A creator-coin rule
+    // buys something else (the creator coin) when a post fires it, so name that post — "why it fired".
+    const what = r.symbol.endsWith("creator coin") ? `creator coin ← $${r.trigger}` : `post $${r.symbol}`;
+    console.log(`  ${pad(utc(r.at), 17)}${pad(r.rule, 18)}${pad(what, 28)}${pad(String(r.usd), 4)}${pad(r.quote, 22)}${short(r.coin)}`);
   }
 }
 const total = rows.reduce((a, r) => a + r.usd, 0);

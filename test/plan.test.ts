@@ -45,6 +45,9 @@ test("creator-coin rules buy the creator coin, once", () => {
   const cc: Config = { rules: [{ ...rule, name: "cc", buy: "creator-coin" }], maxUsdPerDay: 100 };
   const buys = plan(cc, [post(1), post(2)], [], now);
   assert.deepEqual(buys.map((b) => b.coin), ["0xcc"]);
+  // The coin bought (the creator coin) isn't the post that fired the rule, so the buy must carry the
+  // triggering post's symbol — that's what the backtest shows as "why" a creator-coin buy happened.
+  assert.equal(buys[0].trigger, "P1");
 });
 
 // backtest replay: the caps a live run enforces per UTC day must reset each day, and dedup holds across days.

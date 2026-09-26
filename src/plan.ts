@@ -23,7 +23,7 @@ export type Config = {
 
 export type Post = { creator: string; coin: string; symbol: string; createdAt: string; creatorCoin: string | null };
 export type Spend = { rule: string; coin: string; usd: number; at: string; status: "reserved" | "done" | "failed" | "dry-run"; tx?: string };
-export type Buy = { rule: string; creator: string; post: string; coin: string; symbol: string; usd: number; reason: string };
+export type Buy = { rule: string; creator: string; post: string; coin: string; symbol: string; usd: number; trigger: string; reason: string };
 
 export const MAX_SLIPPAGE = 0.2;
 const HANDLE = /^[a-z0-9_.-]{1,40}$/i;
@@ -78,7 +78,7 @@ export function plan(config: Config, posts: Post[], ledger: Spend[], now: Date):
       if ((perRule.get(r.name) ?? 0) >= r.maxPerDay) continue;
       if (spentToday + r.usd > config.maxUsdPerDay) continue;
       out.push({ rule: r.name, creator: p.creator, post: p.coin, coin, symbol: r.buy === "post" ? p.symbol : `${p.creator} creator coin`, usd: r.usd,
-        reason: `@${p.creator} posted $${p.symbol} at ${p.createdAt}` });
+        trigger: p.symbol, reason: `@${p.creator} posted $${p.symbol} at ${p.createdAt}` });
       bought.add(key);
       perRule.set(r.name, (perRule.get(r.name) ?? 0) + 1);
       spentToday += r.usd;
