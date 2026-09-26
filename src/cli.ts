@@ -65,7 +65,7 @@ async function pass() {
     if (!buyer) {
       const q = await quote(b.coin, b.usd, slippage);
       if (!("coins" in q)) dryNoRoute++;
-      log(`would buy $${b.usd} of ${b.symbol} (${b.coin}) for rule "${b.rule}": ${"coins" in q ? `about ${q.coins.toLocaleString("en-US")} coins at the current price` : `no quote (${q.error})`}. ${b.reason}`);
+      log(`would buy $${b.usd} of ${b.symbol} (${b.coin}) for rule "${b.rule}": ${"coins" in q ? `about ${q.coins.toLocaleString("en-US", { maximumFractionDigits: 0 })} coins at the current price` : `no quote (${q.error})`}. ${b.reason}`);
       state.ledger.push({ rule: b.rule, coin: b.coin, usd: b.usd, at: new Date().toISOString(), status: "dry-run" });
       continue;
     }
