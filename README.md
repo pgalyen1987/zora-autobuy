@@ -70,6 +70,44 @@ live run would actually spend. Three honest limits it states in the report:
   pages, so for a creator who posts constantly the window can't be fully reconstructed. When that
   happens the report marks the creator `INCOMPLETE` and treats its spend as a floor.
 
+### What a real run looks like
+
+A real 7-day backtest against live Zora data (2026-09-26, four active creators, `$25`/day cap).
+Handles and coin symbols are replaced with placeholders below; the numbers are unchanged.
+
+```
+Coverage
+  @creator-a         160 post(s) in window · INCOMPLETE — profile only went back to 2026-09-22 03:08
+  @creator-b           8 post(s) in window · complete
+  @creator-c           4 post(s) in window · complete
+  @creator-d           2 post(s) in window · complete
+
+Buys it would have made (25)
+  when (UTC)       rule              bought                  $   ~coins (now)          coin
+  2026-09-20 03:06 c-posts           post $COIN1             4   25,266,180 coins      0x…5248
+  2026-09-22 03:08 a-posts           post $COIN2             3   133,692 coins         0x…68aa
+  2026-09-24 15:16 b-posts           post $COIN3             4   28,224,550 coins      0x…b3b9
+  2026-09-25 01:20 a-posts           post $COIN4             3   no route yet          0x…b237
+  2026-09-26 02:21 d-coin            creator coin            5   704,382 coins         0x…0d56
+  … 20 more rows …
+  25 buy(s) the rules fired · $86 over the window (~$12.29/day)
+  of those, 22 are tradeable now ($77 would actually change hands) · 3 have no swap route yet ($9) and would fail a live run today until liquidity exists.
+  Ceiling: your $25/day cap makes $175 the most it could spend over 7 days, however much anyone posts.
+
+Per rule
+  a-posts               15 buy(s) · $45     (3 no route)  · post @creator-a (cap 3/day, $3/buy)
+  b-posts                5 buy(s) · $20                   · post @creator-b (cap 2/day, $4/buy)
+  c-posts                4 buy(s) · $16                   · post @creator-c (cap 2/day, $4/buy)
+  d-coin                 1 buy(s) · $5                    · creator-coin @creator-d (cap 1/day, $5/buy)
+
+Skipped 149 matching post(s): a daily cap was reached, or that coin was already bought for the rule.
+```
+
+The caps are the story: `@creator-a` posts dozens of times a day, so its `3/day` limit fires three
+buys and skips the rest — 149 skipped posts against 25 buys. A prolific creator can't drain the
+wallet, and the `$25`/day ceiling means the whole set can't spend more than `$175` in a week no
+matter who posts.
+
 ## What keeps it from overspending
 
 - It never buys a post made before it first started, so turning it on doesn't buy anyone's back catalogue.
