@@ -8,6 +8,7 @@
   "scripts": {
     "start": "tsx src/cli.ts",
     "backtest": "tsx src/backtest.ts",
+    "roundtrip": "tsx src/roundtrip.ts",
     "test": "node --import tsx test/all.ts",
     "typecheck": "tsc --noEmit"
   },

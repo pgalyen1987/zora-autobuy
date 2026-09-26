@@ -113,8 +113,9 @@ if (rows.length) {
   }
 }
 const total = rows.reduce((a, r) => a + r.usd, 0);
-// Every buy listed routes, so this total is what a live run would actually have spent — no caveat.
-console.log(`  ${rows.length} buy(s), all tradeable now · ${money(total)} would have changed hands over the window` + (days ? ` (~${money(total / days)}/day)` : ""));
+// Every buy listed has a *buy* route, so this total is what a live run would actually have spent.
+// "buyable", not "tradeable": we quoted USDC→coin here, never the way back — see the Notes below.
+console.log(`  ${rows.length} buy(s), all buyable now · ${money(total)} would have changed hands over the window` + (days ? ` (~${money(total / days)}/day)` : ""));
 // Un-routable matches don't add cost: a live run fails them for $0 and — its slot freed — buys the
 // next eligible post instead, which is already in the total above. Say so, so the report is honest
 // about why some posts aren't listed rather than silently dropping them.
@@ -133,6 +134,9 @@ for (const rule of config.rules) {
 if (skipped.length) console.log(`\nSkipped ${skipped.length} matching post(s): a daily cap was reached, or that coin was already bought for the rule.`);
 
 console.log(`\nNotes`);
+console.log(`  · Buyable is not sellable. This lists buys that would fill; it does not check the exit. Run`);
+console.log(`    \`npm run roundtrip -- --rules ${rulesFile}\` to quote selling each coin straight back — for`);
+console.log(`    thin post coins the round trip can lose most of the money the instant you buy.`);
 console.log(`  · Cost is exact — every buy is a fixed number of dollars in USDC. Coin counts are TODAY's`);
 console.log(`    Zora quote, not the price when the post went out, so a live buy then would differ.`);
 console.log(`  · "mkt cap" is the coin's Zora market cap now — a rough real-coin-vs-throwaway signal, also a`);

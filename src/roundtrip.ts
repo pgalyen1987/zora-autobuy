@@ -59,7 +59,10 @@ async function sellLeg(coin: string, amount: bigint): Promise<number | { error: 
   } catch (e: any) { return { error: why(e) }; }
 }
 
-// 1) the real buys, from the same replay the backtest runs — not a hand-copied list
+// 1) the coins the rules point at, from the same replay() the backtest uses — not a hand-copied
+// list. Note we pass an empty noRoute set: the backtest substitutes away coins with no buy route,
+// but here we want to probe every pick, so an un-buyable one surfaces as its own "no buy route" row
+// rather than being silently swapped out. So this set can differ slightly from the backtest's buys.
 const sinceIso = new Date(Date.now() - days * 86_400_000).toISOString();
 const maxPages = Math.min(60, Math.max(20, days * 5));
 const creators = [...new Set(config.rules.map((r) => r.creator.replace(/^@/, "").toLowerCase()))];

@@ -93,7 +93,7 @@ Buys it would have made (29)
   2026-09-25 12:33 a-posts           post $COIN4                 3   $2       158,125,556 coins     0x…fbb9
   2026-09-26 02:21 d-coin            creator coin ← $COIN0       5   —        698,208 coins         0x…0d56
   … 24 more rows …
-  29 buy(s), all tradeable now · $98 would have changed hands over the window (~$14/day)
+  29 buy(s), all buyable now · $98 would have changed hands over the window (~$14/day)
   (6 matched coins had no swap route; a live run would have failed them for $0 and bought the next eligible post — that substitution is already reflected above.)
   Ceiling: your $25/day cap makes $175 the most it could spend over 7 days, however much anyone posts.
 
@@ -111,6 +111,49 @@ buys and skips the rest — 157 skipped posts against 29 buys. A prolific creato
 wallet, and the `$25`/day ceiling means the whole set can't spend more than `$175` in a week no
 matter who posts. (Here even that ceiling never binds: the per-rule `maxPerDay` limits keep the week
 to `$98`.)
+
+## Can what it buys be sold? (`roundtrip`)
+
+The backtest answers what your rules would *spend*. It does not answer whether the coins they buy
+can be *sold* — and for post coins that is the question that decides everything. `roundtrip` settles
+it the only way that does: for each coin the rules would buy, it quotes buying `$N` of it, then
+immediately quotes selling back every coin that buy returned. What comes back is what the position
+is worth the moment you own it, before any price move, before any thesis.
+
+```sh
+npm run roundtrip -- --rules rules.json --days 7
+```
+
+It signs nothing and needs no wallet — two quotes per coin, same as the backtest. A real 7-day run
+against live Zora data, the same four creators as the backtest above (symbols replaced, numbers
+unchanged):
+
+```
+  coin        mkt cap  in     back    keeps  coin addr     note
+  $COIN-A     $227     $3     $2.40   80%    0x…d944
+  $COIN-B     $1k      $3     $0.06   2%     0x…2dd8
+  $COIN-C     $9k      $3     $0.20   7%     0x…ac37
+  $COIN-D     $1.3M    $3     $0.22   7%     0x…c738
+  $COIN-E     $105     $4     —       0%     0x…b3b9   CANNOT SELL: SwapError: Failed to get quote
+  $COIN-F     $99      $3     —       —      0x…f720   no buy route: SwapError: Failed to create route
+  creator coin—        $5     —       0%     0x…0d56   CANNOT SELL: Not enough liquidity available
+  … 23 more rows …
+
+  In $86.00 · back $7.36 · keeps 9% on an immediate exit,
+  so the round trip costs 91% the moment you buy.
+  11 position(s) could not be sold AT ALL — that money is gone, not down.
+  12 more lost over half their value on the way out.
+  (5 coin(s) could not even be bought; a live run fails those for $0.)
+
+  Read it as a hurdle: a coin has to rise 1069% before the position breaks even.
+```
+
+That is the whole point of running it before you run live. These four creators post constantly, but
+their post coins are thin: put `$86` across a week of them and about `$7` is what you could get back
+out the same minute — most of it in coins that can't be sold at any size. This isn't a knock on the
+tool; it's the tool doing its job. Pick creators whose coins have real two-way liquidity, or the
+caps above just meter how fast you lose it. `keeps` well under `100%` on a coin you actually care
+about is the signal to drop that rule.
 
 ## What keeps it from overspending
 
@@ -143,7 +186,8 @@ approval it needs, simulates the trade and then sends it. Try it with a small `m
 ## Not financial advice
 
 Creator and post coins are volatile and often illiquid; a coin bought seconds after a post can fall
-as fast as it rose. The backtest's `mkt cap` column makes this concrete — many post coins are
-sub-$1,000 microcaps. You're responsible for your rules and your wallet.
+as fast as it rose. The backtest's `mkt cap` column hints at this — many post coins are sub-$1,000
+microcaps — and the `roundtrip` command above measures it exactly: for the example rules, an
+immediate exit returns about 9 cents on the dollar. You're responsible for your rules and your wallet.
 
 MIT licensed.
