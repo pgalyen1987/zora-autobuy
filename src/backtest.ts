@@ -75,7 +75,7 @@ for (const c of creators) {
 
 console.log(`\nBuys it would have made (${rows.length})`);
 if (rows.length) {
-  console.log(`  ${pad("when (UTC)", 17)}${pad("rule", 18)}${pad("buys", 24)}${pad("$", 4)}${pad("~coins at today's price", 22)}coin`);
+  console.log(`  ${pad("when (UTC)", 17)}${pad("rule", 18)}${pad("bought", 24)}${pad("$", 4)}${pad("~coins (now)", 22)}coin`);
   for (const r of rows) {
     const what = r.symbol.endsWith("creator coin") ? `creator coin` : `post $${r.symbol}`;
     console.log(`  ${pad(utc(r.at), 17)}${pad(r.rule, 18)}${pad(what, 24)}${pad(String(r.usd), 4)}${pad(r.quote, 22)}${short(r.coin)}`);
@@ -83,6 +83,9 @@ if (rows.length) {
 }
 const total = rows.reduce((a, r) => a + r.usd, 0);
 console.log(`  ${rows.length} buy(s) · ${money(total)} spent over the window` + (days ? ` (~${money(total / days)}/day avg)` : ""));
+// The one number that answers "what could this cost me?" — a hard ceiling the caps enforce no
+// matter how active the creators are, so it holds even where coverage above is incomplete.
+console.log(`  Ceiling: your ${money(config.maxUsdPerDay)}/day cap makes ${money(config.maxUsdPerDay * days)} the most it could spend over ${days} day${days === 1 ? "" : "s"}, however much anyone posts.`);
 if (noRoute) console.log(`  ${noRoute} of them have no tradeable route right now — a live run would fail those buys until liquidity exists.`);
 
 console.log(`\nPer rule`);
